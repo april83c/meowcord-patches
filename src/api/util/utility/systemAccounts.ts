@@ -115,6 +115,9 @@ export const isSystemAccount = async (user_id: string) =>
 
 type SystemDMFile = Parameters<typeof uploadMessageFiles>[1][number];
 
+const SAFETY_CARD_TYPES = ["safety_system_notification", "safety_policy_notice"];
+const isSafetyCard = (embed: Embed) => SAFETY_CARD_TYPES.includes(String(embed.type));
+
 export interface SystemDMMessage {
     content?: string;
     embeds?: Embed[];
@@ -141,7 +144,7 @@ export async function sendEncryptedSystemDM(sender: User, recipientId: string, m
         AND NOT EXISTS (SELECT 1 FROM recipients extra WHERE extra.channel_id=r.channel_id AND extra.user_id NOT IN ($1,$2)) LIMIT 1`,
         [recipientId, sender.id, ChannelType.DM],
     );
-    const channel = found
+    let channel = found
         ? await Channel.findOneOrFail({
               where: { id: found.channel_id },
               relations: { recipients: true },
@@ -153,6 +156,29 @@ export async function sendEncryptedSystemDM(sender: User, recipientId: string, m
               nsfw: false,
               recipients: [sender.id, recipientId].map((user_id) => Recipient.create({ user_id, closed: true })),
           }).save();
+    // The client only draws safety cards from unencrypted embeds, and the server drops embeds from encrypted
+    // messages. So a card goes out in the clear, and the channel it lands in is switched off for encryption.
+    const cards = (message.embeds ?? []).filter(isSafetyCard);
+    if (cards.length || channel.e2ee_disabled_at) {
+        if (channel.e2ee_enabled_at) {
+            await Channel.update({ id: channel.id }, { e2ee_enabled_at: null, e2ee_disabled_at: new Date() });
+            channel = await Channel.findOneOrFail({ where: { id: channel.id }, relations: { recipients: true } });
+        }
+        const plainFiles = message.files ?? [];
+        const plainText = [message.content, ...(message.embeds ?? []).filter((embed) => !isSafetyCard(embed)).flatMap(systemEmbedText)].filter(Boolean).join("\n\n");
+        await reopenDirectMessage(channel, sender.id, { neverMessageRequest: true });
+        const plainAttachments = plainFiles.length ? await uploadMessageFiles<MessageOptionAttachment>(`/attachments/${channel.id}/${id}`, plainFiles) : undefined;
+        return sendMessage({
+            id,
+            nonce: id,
+            channel_id: channel.id,
+            author_id: sender.id,
+            content: plainText,
+            embeds: cards,
+            reactions: message.reactions,
+            attachments: plainAttachments,
+        });
+    }
     await Channel.ensureDefaultPrivateEncryption(channel, sender.id);
     const files = message.encryptedFiles ?? encryptSystemFiles(message.files ?? []);
     const text = [message.content, ...(message.embeds ?? []).flatMap(systemEmbedText)].filter(Boolean).join("\n\n");
