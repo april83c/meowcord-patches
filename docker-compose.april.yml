@@ -1,0 +1,130 @@
+name: meowcord
+
+x-server-image: &server-image ghcr.io/april83c/meowcord-patches/server:${MEOWCORD_TAG:-latest}
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fosscord}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-fosscord}
+    volumes:
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  client:
+    image: *server-image
+    init: true
+    command: ["client"]
+    restart: "no"
+    environment:
+      CLIENT_CONCURRENCY: ${CLIENT_CONCURRENCY:-8}
+    volumes:
+      - client:/data/client
+
+  sfu:
+    image: ghcr.io/april83c/meowcord-patches/sfu:${MEOWCORD_TAG:-latest}
+    init: true
+    restart: unless-stopped
+    environment:
+      WRTC_PUBLIC_IP: ${WRTC_PUBLIC_IP:?set WRTC_PUBLIC_IP in .env}
+      WRTC_PORT: ${WRTC_PORT:-50000}
+      PION_SFU_VERBOSE: ${PION_SFU_VERBOSE:-}
+    # the only published port: voice and video are udp straight to the sfu, which a cloudflare tunnel can't carry
+    ports:
+      - "${WRTC_PORT:-50000}:${WRTC_PORT:-50000}/udp"
+    volumes:
+      - sfu:/run/sfu
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/sfu/sfu.sock"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  server:
+    image: *server-image
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 35s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sfu:
+        condition: service_healthy
+      client:
+        condition: service_completed_successfully
+    environment:
+      DATABASE: postgres://${POSTGRES_USER:-fosscord}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fosscord}
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      INSTANCE_NAME: ${INSTANCE_NAME:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      WRTC_PUBLIC_IP: ${WRTC_PUBLIC_IP}
+      WRTC_PORT_MIN: ${WRTC_PORT:-50000}
+      WRTC_PORT_MAX: ${WRTC_PORT:-50000}
+      CAP_INSTANCE_URL: ${CAP_INSTANCE_URL:-}
+      CAP_SITE_KEY: ${CAP_SITE_KEY:-}
+      CAP_SECRET_KEY: ${CAP_SECRET_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      E2EE_RECOVERY_KEY_FILE: ${E2EE_RECOVERY_KEY_FILE:-}
+      E2EE_RECOVERY_MASTER_KEY: ${E2EE_RECOVERY_MASTER_KEY:-}
+      LOG_REQUESTS: ${LOG_REQUESTS:-500,501}
+    volumes:
+      - state:/data/state
+      - storage:/data/storage
+      - client:/data/client
+      - sfu:/run/sfu
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "Promise.all(['/readyz', '/api/ping', '/login'].map(async (path) => { try { const r = await fetch('http://127.0.0.1:3001' + path, { signal: AbortSignal.timeout(3000) }); return { path, status: r.status, ok: r.ok }; } catch { return { path, status: 'unreachable', ok: false }; } })).then((checks) => { console.log(JSON.stringify(checks)); process.exit(checks.every((c) => c.ok) ? 0 : 1); })",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 2m
+
+  # the tunnel's public hostname in the cloudflare dashboard points at http://server:3001
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--metrics", "127.0.0.1:2000", "run"]
+    depends_on:
+      server:
+        condition: service_healthy
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:2000", "ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  postgres:
+    name: ${MEOWCORD_VOLUME_PREFIX:-fosscord}_postgres
+  state:
+    name: ${MEOWCORD_VOLUME_PREFIX:-fosscord}_state
+  storage:
+    name: ${MEOWCORD_VOLUME_PREFIX:-fosscord}_storage
+  client:
+    name: ${MEOWCORD_VOLUME_PREFIX:-fosscord}_client
+  sfu:
+    name: ${MEOWCORD_VOLUME_PREFIX:-fosscord}_sfu

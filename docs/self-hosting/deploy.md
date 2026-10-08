@@ -234,6 +234,28 @@ The proxy connects through Docker's bridge network, whose addresses are in the p
 
 A stack that was running with Caddy keeps the container around after the profile is turned off. Remove it with `docker compose --profile caddy rm -sf caddy`.
 
+### Cloudflare Tunnel with published images
+
+`docker-compose.april.yml` is an alternative to `docker-compose.yml` for a host that accepts no inbound web traffic. It pulls `ghcr.io/april83c/meowcord-patches/server` and `ghcr.io/april83c/meowcord-patches/sfu` instead of building them, leaves out Caddy and runs `cloudflared`, which connects out to Cloudflare and carries the web client, the API and the websockets. The server and Postgres are reachable inside the compose network and nowhere else. The one published port is the voice port, `WRTC_PORT` over UDP, because a tunnel cannot carry that media. It uses the same volumes as `docker-compose.yml`.
+
+`.github/workflows/docker.yml` builds both images for `linux/amd64` and `linux/arm64` on every push to `main` and on every `v*` tag. It tags them `latest` on `main`, the branch or tag name, and `sha-<short commit>`.
+
+1. Create a tunnel in the Cloudflare Zero Trust dashboard and add a public hostname for `DOMAIN` with the service `http://server:3001`.
+2. Put the tunnel's token in `TUNNEL_TOKEN` in `.env`, next to `DOMAIN`, `POSTGRES_PASSWORD` and `WRTC_PUBLIC_IP`. `COMPOSE_PROFILES`, `SERVER_PORT` and `CADDY_GLOBAL_OPTIONS` are not read.
+3. Add `COMPOSE_FILE=docker-compose.april.yml` to `.env`, so `docker compose` and the helpers in `scripts/ops` use this file without `-f`.
+4. Run `docker compose up -d`.
+
+`WRTC_PUBLIC_IP` has to be the host's public IPv4 address. The SFU rejects a host name. Behind NAT, forward the UDP port to the host. Clients learn that address when they join a call, so the tunnel hides the host from text users only.
+
+`MEOWCORD_TAG` selects the image tag, `latest` by default. Update with:
+
+```sh
+docker compose pull
+docker compose up -d
+```
+
+`scripts/auto-update.sh` rebuilds images from the checkout and checks the server on the host's loopback, so it does not work with this file.
+
 ### Trying it locally
 
 Caddy's internal CA and a made-up domain are enough to run the whole stack on one machine:
