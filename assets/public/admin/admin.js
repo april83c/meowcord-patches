@@ -1106,7 +1106,7 @@ async function renderSettings(view) {
                         ${toggle("register.guestsRequireInvite", "Require an invite for guest accounts", "Guest accounts are created without a password.")}
                         ${toggle("register.email.required", "Require an email address", "Off lets people sign up with only a username and password.")}
                         ${invertedToggle("defaults.user.verified", "Verify email addresses", "Sends each new account a link to confirm its address. Off marks new accounts as verified without checking. Needs email delivery.")}
-                        ${toggle("login.requireVerification", "Require a verified email to sign in", "Accounts that have not opened their verification link cannot sign in. Needs an email address to be required, and every existing account to have one.")}
+                        ${toggle("login.requireVerification", "Require a verified email to sign in", "Accounts that have not opened their verification link cannot sign in. Needs an email address to be required.")}
                         ${toggle("register.allowMultipleAccounts", "Allow multiple accounts per person", "When off, sign-ups from known devices or IPs are refused.")}
                         ${toggle("register.incrementingDiscriminators", "Give out discriminators in order", "Off picks a random free one for legacy usernames.")}
                     </div>

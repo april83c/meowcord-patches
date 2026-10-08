@@ -34,7 +34,7 @@ Signup asks for a username and a password. The form has no email field, and `ass
 
 `src/bundle/TestClient.ts` puts `register.email.required` in `GLOBAL_ENV.REGISTER_EMAIL_REQUIRED`, so the form follows the switch on the next page load, without a restart. Verification links need an email provider, see `SMTP_HOST` in [deploy.md](../self-hosting/deploy.md#environment).
 
-Saving refuses to require a verified email to sign in in 2 cases, with HTTP 400 and nothing saved. The first is when an email address is not required at signup, including turning that requirement off while verified sign-in stays on. The second is when the switch is being turned on and an account that is not a bot, system or deleted account has no email address. The message gives the number of such accounts and names up to 3 of them.
+Saving refuses to require a verified email to sign in while an email address is not required at signup, with HTTP 400 and nothing saved. That includes turning the email requirement off while verified sign-in stays on. An account that signed up without an email address is not checked: the client's verification prompt lets an unverified account set or change its address.
 
 ## Testing
 
