@@ -1,6 +1,8 @@
 import { Request, Response, Router } from "express";
+import { IsNull } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { captchaEnabled } from "@spacebar/api/util";
+import { User } from "@spacebar/database";
 import { Config } from "@spacebar/util";
 import { HTTPError } from "lambert-server/HTTPError";
 import { AdminSettingsUpdateSchema } from "@spacebar/schemas";
@@ -12,7 +14,7 @@ const router = Router({ mergeParams: true });
 const pickRate = ({ count, window }: { count: number; window: number }) => ({ count, window });
 
 const pickSettings = () => {
-    const { general, client, register, login, passwordReset, security, limits, guild, externalRequests, user } = Config.get();
+    const { general, client, register, login, passwordReset, security, limits, guild, externalRequests, user, defaults } = Config.get();
     const { captcha } = security;
     return {
         user: { identityBlockedTerms: user.identityBlockedTerms },
@@ -54,7 +56,8 @@ const pickSettings = () => {
                 minSymbols: register.password.minSymbols,
             },
         },
-        login: { requireCaptcha: login.requireCaptcha },
+        login: { requireCaptcha: login.requireCaptcha, requireVerification: login.requireVerification },
+        defaults: { user: { verified: defaults.user.verified } },
         passwordReset: { requireCaptcha: passwordReset.requireCaptcha },
         captcha: {
             capMode: captcha.capMode,
@@ -87,6 +90,29 @@ const pickSettings = () => {
             discovery: { hideJoinedGuilds: guild.discovery.hideJoinedGuilds },
         },
     };
+};
+
+const assertVerifiedLoginIsReachable = async (body: AdminSettingsUpdateSchema) => {
+    const { login, register } = Config.get();
+    if (!(body.login?.requireVerification ?? login.requireVerification)) return;
+    if (!(body.register?.email?.required ?? register.email.required)) throw new HTTPError("Require an email address at sign-up before requiring a verified email to sign in", 400);
+    if (login.requireVerification) return;
+    const people = { bot: false, system: false, deleted: false };
+    const [withoutEmail, total] = await User.findAndCount({
+        where: [
+            { ...people, email: IsNull() },
+            { ...people, email: "" },
+        ],
+        select: { id: true, username: true },
+        order: { id: "ASC" },
+        take: 3,
+    });
+    if (!total) return;
+    const names = withoutEmail.map((user) => user.username).join(", ");
+    throw new HTTPError(
+        `${total} ${total === 1 ? "account has" : "accounts have"} no email address (${names}${total > withoutEmail.length ? " and others" : ""}). Every account needs one before a verified email can be required to sign in`,
+        400,
+    );
 };
 
 const blankToNull = (value: unknown) => (typeof value === "string" ? value.trim() || null : value);
@@ -156,6 +182,8 @@ router.patch(
                 throw new HTTPError("Use an HTTP or HTTPS Cap Standalone URL without credentials, query parameters or a fragment", 400);
         }
 
+        await assertVerifiedLoginIsReachable(body);
+
         const { login, register: registerRate, ...rate } = body.rate ?? {};
 
         // a list replaces the old one; merging would keep entries that were taken off it
@@ -175,6 +203,7 @@ router.patch(
             },
             register,
             login: body.login ?? {},
+            defaults: body.defaults ?? {},
             passwordReset: body.passwordReset ?? {},
             security: { captcha },
             limits: {
