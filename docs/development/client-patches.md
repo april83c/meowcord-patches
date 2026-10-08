@@ -112,6 +112,8 @@ The native Profiles color section includes **Show profile gradient**. Turning it
 
 ## Client scripts
 
+`55-simple-signup.js` takes the email and date of birth fields out of the signup form. It leaves the email field and its required check in place when `GLOBAL_ENV.REGISTER_EMAIL_REQUIRED` is true, which `src/bundle/TestClient.ts` sets from `register.email.required`. [signup.md](../features/signup.md#email) describes the setting.
+
 `60-auth-pages.js` uses a native modal dialog for email verification and remote-auth decisions. The browser keeps the background inert and restores prior focus on close. Content replacement focuses the next action, and an explicit zero tab index makes buttons reachable in WebKit keyboard mode. Escape cancellation is prevented and outside clicks do not dismiss these required results. [The HTML dialog specification](https://html.spec.whatwg.org/multipage/interactive-elements.html#the-dialog-element) defines native modal focus behavior. The portal and encryption factories already use native dialogs and retain their own close callbacks.
 
 `66-native-dialog-scroll.js` locks document scrolling while any native modal dialog is open, including authentication and encryption dialogs. The lock remains after child dismissal and ends after the last modal closes; pre-existing inline locks remain untouched. Required dismissal and scrolling inside long encryption dialogs keep working.

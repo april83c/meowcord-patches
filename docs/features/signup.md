@@ -20,7 +20,21 @@ The verification SDK must register its widget when the script finishes loading. 
 
 Cap is a form-associated custom element, and its native constraint validation can reject `requestSubmit()` before the form submit handler runs. Validation errors focus the Cap trigger and expose the status and error through a description in its shadow tree. Routine updates use an atomic status region and urgent errors use an atomic alert. Retry verification has a 40-pixel minimum desktop height and 44 pixels for coarse pointers. [W3C description guidance](https://www.w3.org/WAI/WCAG21/Techniques/aria/ARIA1) explains the description relationship.
 
-Closed registration reports `DISABLED` for `register.disabled` and `REGISTRATION_DISABLED` for `register.allowNewRegistration: false` on the visible username field, because native signup has no email field. The valid proof stays available after either policy rejection, and an unsolved challenge still blocks signup.
+Closed registration reports `DISABLED` for `register.disabled` and `REGISTRATION_DISABLED` for `register.allowNewRegistration: false` on the visible username field, because native signup has no email field by default. The valid proof stays available after either policy rejection, and an unsolved challenge still blocks signup.
+
+## Email
+
+Signup asks for a username and a password. The form has no email field, and `assets/client_patches/55-simple-signup.js` removes Discord's. Site settings has 3 switches under Registration that change this:
+
+| Switch                              | Setting                     | Effect                                                                                                                                              |
+| ----------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Require an email address            | `register.email.required`   | The form shows a required email field first, and the API rejects a registration without an email.                                                   |
+| Verify email addresses              | `defaults.user.verified`    | On stores `false`: a new account starts unverified and gets a verification link. Off stores `true`: a new account counts as verified, with no link. |
+| Require a verified email to sign in | `login.requireVerification` | An unverified account cannot sign in. Accounts created while verification was off are already verified.                                             |
+
+`src/bundle/TestClient.ts` puts `register.email.required` in `GLOBAL_ENV.REGISTER_EMAIL_REQUIRED`, so the form follows the switch on the next page load, without a restart. Verification links need an email provider, see `SMTP_HOST` in [deploy.md](../self-hosting/deploy.md#environment).
+
+Saving refuses to require a verified email to sign in in 2 cases, with HTTP 400 and nothing saved. The first is when an email address is not required at signup, including turning that requirement off while verified sign-in stays on. The second is when the switch is being turned on and an account that is not a bot, system or deleted account has no email address. The message gives the number of such accounts and names up to 3 of them.
 
 ## Testing
 

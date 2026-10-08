@@ -8935,6 +8935,24 @@
         "properties": {
           "requireCaptcha": {
             "type": "boolean"
+          },
+          "requireVerification": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "defaults": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "verified": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false

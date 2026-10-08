@@ -10,6 +10,7 @@ function fixture() {
         client: {},
         register: { email: {}, dateOfBirth: {}, password: {} },
         login: {},
+        defaults: { user: {} },
         passwordReset: {},
         security: {
             captcha: {
@@ -53,6 +54,8 @@ function fixture() {
         "@spacebar/util/util/LoadingScreen": require("../../dist/util/util/LoadingScreen.js"),
         "@spacebar/api/middlewares": { route: () => () => {} },
         "@spacebar/api/util": { captchaEnabled: () => false },
+        "@spacebar/database": { User: {} },
+        typeorm: { IsNull: () => null },
         "@spacebar/util": { Config: { get: () => cfg, set: async (value) => writes.push(value) } },
         "lambert-server/HTTPError": { HTTPError },
     };

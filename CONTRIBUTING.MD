@@ -22,7 +22,7 @@ After changing signup verification, run `cap-signup-smoke.mjs` against your isol
 
 DMs and group DMs can be end-to-end encrypted. The design is in [docs/features/e2ee.md](docs/features/e2ee.md).
 
-Signing up needs only a username and a password. Email and date of birth are optional, and the operator can put a [Cap](https://capjs.js.org) captcha in front of registration, login and password reset. We are not looking for support for more CAPTCHAs at this moment.
+Signing up needs only a username and a password. Date of birth is optional, email is optional unless the operator requires it, and the operator can put a [Cap](https://capjs.js.org) captcha in front of registration, login and password reset. We are not looking for support for more CAPTCHAs at this moment.
 
 The instance has its own status page at `/status`, an admin dashboard at `/admin` and Web Push notifications for users with no tab open.
 
