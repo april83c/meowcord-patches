@@ -90,10 +90,10 @@ const pickSettings = () => {
     };
 };
 
-const assertVerifiedLoginRequiresEmail = (body: AdminSettingsUpdateSchema) => {
+const assertVerificationRequiresEmail = (body: AdminSettingsUpdateSchema) => {
     const { login, register } = Config.get();
     if (!(body.login?.requireVerification ?? login.requireVerification)) return;
-    if (!(body.register?.email?.required ?? register.email.required)) throw new HTTPError("Require an email address at sign-up before requiring a verified email to sign in", 400);
+    if (!(body.register?.email?.required ?? register.email.required)) throw new HTTPError("Require an email address at sign-up before requiring a verified email", 400);
 };
 
 const blankToNull = (value: unknown) => (typeof value === "string" ? value.trim() || null : value);
@@ -163,7 +163,7 @@ router.patch(
                 throw new HTTPError("Use an HTTP or HTTPS Cap Standalone URL without credentials, query parameters or a fragment", 400);
         }
 
-        assertVerifiedLoginRequiresEmail(body);
+        assertVerificationRequiresEmail(body);
 
         const { login, register: registerRate, ...rate } = body.rate ?? {};
 

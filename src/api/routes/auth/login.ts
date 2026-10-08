@@ -73,16 +73,6 @@ router.post(
             });
         }
 
-        // return an error for unverified accounts if verification is required
-        if (config.login.requireVerification && !user.verified) {
-            throw FieldErrors({
-                login: {
-                    code: "ACCOUNT_LOGIN_VERIFICATION_EMAIL",
-                    message: "Email verification is required, please check your email.",
-                },
-            });
-        }
-
         if (!undelete && user.deleted)
             return res.status(400).json({
                 message: "This account is scheduled for deletion.",
