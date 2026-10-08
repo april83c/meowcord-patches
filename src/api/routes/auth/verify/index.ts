@@ -2,7 +2,7 @@ import { Request, Response, Router } from "express";
 import { emitUserUpdate, readTicket, checkCaptcha } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { User } from "@spacebar/database";
-import { Config, FieldErrors, generateToken } from "@spacebar/util";
+import { Config, emitRequiredAction, FieldErrors, generateToken } from "@spacebar/util";
 
 const router = Router({ mergeParams: true });
 
@@ -47,6 +47,7 @@ router.post(
         if (!user.verified) {
             await User.update({ id: user.id }, { verified: true });
             await emitUserUpdate(user.id);
+            await emitRequiredAction(user.id);
         }
 
         res.json({
