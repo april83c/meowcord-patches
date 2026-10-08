@@ -56,6 +56,7 @@ router.patch(
     "/",
     route({
         requestBody: "UserModifySchema",
+        allowUnverified: true,
         responses: {
             200: {
                 body: "UserUpdateResponse",

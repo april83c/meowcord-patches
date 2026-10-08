@@ -60,14 +60,14 @@ function fixture({ emailRequired = false, requireVerification = false } = {}) {
     return { writes, patch: (body) => patch({ body }, { json() {} }) };
 }
 
-test("verified sign-in is refused while sign-up does not require an email", async () => {
+test("a verified email cannot be required while sign-up does not require an email", async () => {
     const { patch, writes } = fixture();
     await assert.rejects(patch({ login: { requireVerification: true } }), (error) => error.status === 400 && /Require an email address at sign-up/.test(error.message));
     await assert.rejects(patch({ login: { requireVerification: true }, register: { email: { required: false } } }), (error) => error.status === 400);
     assert.equal(writes.length, 0);
 });
 
-test("verified sign-in saves once email is required", async () => {
+test("a verified email can be required once sign-up requires an email", async () => {
     const { patch, writes } = fixture();
     await patch({ login: { requireVerification: true }, register: { email: { required: true } }, defaults: { user: { verified: false } } });
     assert.equal(writes.length, 1);
@@ -76,7 +76,7 @@ test("verified sign-in saves once email is required", async () => {
     assert.equal(writes[0].defaults.user.verified, false);
 });
 
-test("required email cannot be turned off while verified sign-in stays on", async () => {
+test("required email cannot be turned off while a verified email stays required", async () => {
     const { patch, writes } = fixture({ emailRequired: true, requireVerification: true });
     await assert.rejects(patch({ register: { email: { required: false } } }), (error) => error.status === 400);
     assert.equal(writes.length, 0);
