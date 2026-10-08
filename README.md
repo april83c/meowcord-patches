@@ -21,6 +21,14 @@ docker compose up -d --build
 
 after registering your operator account, grant it access locally using its numeric account ID: `docker compose exec server bun scripts/ops/operator.mjs grant <account-id>`. the first signup is an ordinary account. see the alpha guide for local provisioning and revocation.
 
+## instances
+
+public meowcord instances. to add yours, open a pull request that adds a row.
+
+| instance | link | source |
+| -------- | ---- | ------ |
+| Tabaque  | [tabaque.lol](https://tabaque.lol) | [PoZorKino/tabaque](https://github.com/PoZorKino/tabaque) |
+
 ## contributing
 
 AI contributions are allowed during the alpha. please read [CONTRIBUTING.MD](CONTRIBUTING.MD) for development conventions and verification commands, and open an issue or pull request for bugs and improvements.
