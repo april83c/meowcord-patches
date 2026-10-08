@@ -19,6 +19,7 @@ export * from "./networking";
 export * from "./Permissions";
 export * from "./ipc/RabbitMQ";
 export * from "./Regex";
+export * from "./RequiredAction";
 export * from "./Rights";
 export * from "./Snowflake";
 export * from "./Token";

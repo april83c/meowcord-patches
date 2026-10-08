@@ -1,6 +1,6 @@
 import { Channel, Guild, Member, Recipient, Relationship, User, VoiceChannels, VoiceState } from "@spacebar/database";
 import { Payload, WebSocket, genVoiceToken } from "@spacebar/gateway";
-import { Config, emitEvent, getPermission, VoiceServerUpdateEvent, VoiceStateUpdateEvent } from "@spacebar/util";
+import { Config, emitEvent, getPermission, requiredAction, VoiceServerUpdateEvent, VoiceStateUpdateEvent } from "@spacebar/util";
 import { ChannelType, ConfigVoiceRegion, VoiceStateUpdateSchema } from "@spacebar/schemas";
 import { check } from "./instanceOf";
 
@@ -9,7 +9,7 @@ const VOICE_TYPES = [ChannelType.GUILD_VOICE, ChannelType.GUILD_STAGE_VOICE, Cha
 async function awaitsVerification(userId: string) {
     if (!Config.get().login.requireVerification) return false;
     const user = await User.findOne({ where: { id: userId }, select: { id: true, bot: true, verified: true } });
-    return !!user && !user.bot && !user.verified;
+    return !!user && requiredAction(user) !== null;
 }
 
 async function canJoin(userId: string, guildId: string | undefined, channelId: string, currentChannelId?: string) {
