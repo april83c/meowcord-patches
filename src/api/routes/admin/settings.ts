@@ -1,8 +1,6 @@
 import { Request, Response, Router } from "express";
-import { IsNull } from "typeorm";
 import { route } from "@spacebar/api/middlewares";
 import { captchaEnabled } from "@spacebar/api/util";
-import { User } from "@spacebar/database";
 import { Config } from "@spacebar/util";
 import { HTTPError } from "lambert-server/HTTPError";
 import { AdminSettingsUpdateSchema } from "@spacebar/schemas";
@@ -92,27 +90,10 @@ const pickSettings = () => {
     };
 };
 
-const assertVerifiedLoginIsReachable = async (body: AdminSettingsUpdateSchema) => {
+const assertVerifiedLoginRequiresEmail = (body: AdminSettingsUpdateSchema) => {
     const { login, register } = Config.get();
     if (!(body.login?.requireVerification ?? login.requireVerification)) return;
     if (!(body.register?.email?.required ?? register.email.required)) throw new HTTPError("Require an email address at sign-up before requiring a verified email to sign in", 400);
-    if (login.requireVerification) return;
-    const people = { bot: false, system: false, deleted: false };
-    const [withoutEmail, total] = await User.findAndCount({
-        where: [
-            { ...people, email: IsNull() },
-            { ...people, email: "" },
-        ],
-        select: { id: true, username: true },
-        order: { id: "ASC" },
-        take: 3,
-    });
-    if (!total) return;
-    const names = withoutEmail.map((user) => user.username).join(", ");
-    throw new HTTPError(
-        `${total} ${total === 1 ? "account has" : "accounts have"} no email address (${names}${total > withoutEmail.length ? " and others" : ""}). Every account needs one before a verified email can be required to sign in`,
-        400,
-    );
 };
 
 const blankToNull = (value: unknown) => (typeof value === "string" ? value.trim() || null : value);
@@ -182,7 +163,7 @@ router.patch(
                 throw new HTTPError("Use an HTTP or HTTPS Cap Standalone URL without credentials, query parameters or a fragment", 400);
         }
 
-        await assertVerifiedLoginIsReachable(body);
+        assertVerifiedLoginRequiresEmail(body);
 
         const { login, register: registerRate, ...rate } = body.rate ?? {};
 
