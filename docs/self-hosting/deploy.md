@@ -245,7 +245,7 @@ A stack that was running with Caddy keeps the container around after the profile
 3. Add `COMPOSE_FILE=docker-compose.april.yml` to `.env`, so `docker compose` and the helpers in `scripts/ops` use this file without `-f`.
 4. Run `docker compose up -d`.
 
-`WRTC_PUBLIC_IP` has to be the host's public IPv4 address. The SFU rejects a host name. Behind NAT, forward the UDP port to the host. Clients learn that address when they join a call, so the tunnel hides the host from text users only.
+`WRTC_PUBLIC_IP` is the host's public IPv4 address, or a host name that resolves to it, such as a dynamic DNS name. Behind NAT, forward the UDP port to the host. After the address behind a host name changes, run `docker compose restart sfu server`. Clients learn that address when they join a call, so the tunnel hides the host from text users only.
 
 `MEOWCORD_TAG` selects the image tag, `latest` by default. Update with:
 
