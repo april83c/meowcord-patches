@@ -1,0 +1,34 @@
+diff --git a/src/plugins/webScreenShare.browser/index.tsx b/src/plugins/webScreenShare.browser/index.tsx
+--- a/src/plugins/webScreenShare.browser/index.tsx
++++ b/src/plugins/webScreenShare.browser/index.tsx
+@@ -26,7 +26,7 @@
+ 
+ const logger = new Logger("VencordScreenShare");
+ 
+-const getDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
++const getDisplayMedia = navigator.mediaDevices?.getDisplayMedia?.bind(navigator.mediaDevices);
+ 
+ function openScreenSharePicker(options: DisplayMediaStreamOptions) {
+     return new Promise<MediaStream>((resolve, reject) => {
+@@ -108,7 +108,7 @@
+             delete videoOptions.width;
+ 
+             submit(
+-                getDisplayMedia({
++                getDisplayMedia!({
+                     video: {
+                         ...videoOptions,
+                         frameRate,
+@@ -274,10 +274,10 @@
+     managedStyle,
+ 
+     start() {
+-        navigator.mediaDevices.getDisplayMedia = openScreenSharePicker;
++        if (getDisplayMedia) navigator.mediaDevices.getDisplayMedia = openScreenSharePicker;
+     },
+     stop() {
+-        navigator.mediaDevices.getDisplayMedia = getDisplayMedia;
++        if (getDisplayMedia) navigator.mediaDevices.getDisplayMedia = getDisplayMedia;
+     },
+ 
+     patches: [
