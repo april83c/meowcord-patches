@@ -10,6 +10,7 @@ function fixture() {
         client: {},
         register: { email: {}, dateOfBirth: {}, password: {} },
         login: {},
+        defaults: { user: {} },
         passwordReset: {},
         security: {
             captcha: {

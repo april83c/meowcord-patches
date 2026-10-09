@@ -20,7 +20,25 @@ The verification SDK must register its widget when the script finishes loading. 
 
 Cap is a form-associated custom element, and its native constraint validation can reject `requestSubmit()` before the form submit handler runs. Validation errors focus the Cap trigger and expose the status and error through a description in its shadow tree. Routine updates use an atomic status region and urgent errors use an atomic alert. Retry verification has a 40-pixel minimum desktop height and 44 pixels for coarse pointers. [W3C description guidance](https://www.w3.org/WAI/WCAG21/Techniques/aria/ARIA1) explains the description relationship.
 
-Closed registration reports `DISABLED` for `register.disabled` and `REGISTRATION_DISABLED` for `register.allowNewRegistration: false` on the visible username field, because native signup has no email field. The valid proof stays available after either policy rejection, and an unsolved challenge still blocks signup.
+Closed registration reports `DISABLED` for `register.disabled` and `REGISTRATION_DISABLED` for `register.allowNewRegistration: false` on the visible username field, because native signup has no email field by default. The valid proof stays available after either policy rejection, and an unsolved challenge still blocks signup.
+
+## Email
+
+Signup asks for a username and a password. The form has no email field, and `assets/client_patches/55-simple-signup.js` removes Discord's. Site settings has 3 switches under Registration that change this:
+
+| Switch                   | Setting                     | Effect                                                                                                                                                                                                               |
+| ------------------------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Require an email address | `register.email.required`   | The form shows a required email field first, and the API rejects a registration without an email.                                                                                                                    |
+| Verify email addresses   | `defaults.user.verified`    | On stores `false`: a new account starts unverified and gets a verification link. Off stores `true`: a new account counts as verified, with no link.                                                                  |
+| Require a verified email | `login.requireVerification` | An unverified account can sign in and read, the server refuses what it tries to change, and the client holds it at a Verification Required screen. Accounts created while verification was off are already verified. |
+
+`src/bundle/TestClient.ts` puts `register.email.required` in `GLOBAL_ENV.REGISTER_EMAIL_REQUIRED`, so the form follows the switch on the next page load, without a restart. Verification links need an email provider, see `SMTP_HOST` in [deploy.md](../self-hosting/deploy.md#environment).
+
+Saving refuses to require a verified email while an email address is not required at signup, with HTTP 400 and nothing saved. That includes turning the email requirement off while the verified email requirement stays on.
+
+Sign-in is never refused for an unverified account. The gateway sends `required_action: REQUIRE_VERIFIED_EMAIL` in `READY`, and the client replaces the app with a Verification Required screen. Its Verify by Email button opens a dialog with Resend Email and Change Email, so an account with a mistyped or missing address can fix it. The server sends `USER_REQUIRED_ACTION_UPDATE` to the account's open clients when its verification state changes: when the emailed link is opened, when an operator marks the account verified or unverified, and when the account changes its address. A client that is open on the screen leaves it without a reload.
+
+The server enforces the requirement as well. While it is on, `route()` in `src/api/middlewares/Route.ts` answers every `POST`, `PUT`, `PATCH` and `DELETE` from an unverified account with HTTP 403 and code 40002, on each route that requires authentication. `GET` requests stay available. 3 routes set `allowUnverified` and stay open: `POST /auth/verify/resend`, `POST /auth/logout` and `PATCH /users/@me`, which the dialog uses to change the address. `POST /auth/verify` does not require a token. The gateway ignores a voice channel join from an unverified account. Bots are not held back. The encryption engine cannot register its keys while the account is held back, so it retries and finishes once the account is verified.
 
 ## Testing
 

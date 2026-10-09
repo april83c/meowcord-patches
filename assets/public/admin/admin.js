@@ -956,6 +956,10 @@ async function renderSettings(view) {
     html`<label class="toggle"
             ><input type="checkbox" name="${path}" ${getPath(s, path) ? raw("checked") : ""} /><span>${label}${hint ? html`<span class="hint">${hint}</span>` : ""}</span></label
         >`;
+  const invertedToggle = (path, label, hint) =>
+    html`<label class="toggle"
+            ><input type="checkbox" name="${path}" data-inverted ${getPath(s, path) ? "" : raw("checked")} /><span>${label}${hint ? html`<span class="hint">${hint}</span>` : ""}</span></label
+        >`;
   const captchaProvider =
     !s.captcha.service || s.captcha.service === "cap"
       ? s.captcha.capMode === "standalone"
@@ -1101,6 +1105,8 @@ async function renderSettings(view) {
                         ${toggle("register.requireInvite", "Require an invite to register", "New accounts must join through an invite link.")}
                         ${toggle("register.guestsRequireInvite", "Require an invite for guest accounts", "Guest accounts are created without a password.")}
                         ${toggle("register.email.required", "Require an email address", "Off lets people sign up with only a username and password.")}
+                        ${invertedToggle("defaults.user.verified", "Verify email addresses", "Sends each new account a link to confirm its address. Off marks new accounts as verified without checking. Needs email delivery.")}
+                        ${toggle("login.requireVerification", "Require a verified email", "Until an account opens its verification link it can sign in and read, but not post, join or call. The app holds it at a prompt to resend the link or change its address. Needs an email address to be required.")}
                         ${toggle("register.allowMultipleAccounts", "Allow multiple accounts per person", "When off, sign-ups from known devices or IPs are refused.")}
                         ${toggle("register.incrementingDiscriminators", "Give out discriminators in order", "Off picks a random free one for legacy usernames.")}
                     </div>
@@ -1296,7 +1302,9 @@ ${(s.register.blacklistedUsernames ?? []).join("\n")}</textarea>
       if (el.name === "captcha.secret" && !el.value) continue;
       const value =
         el.type === "checkbox"
-          ? el.checked
+          ? "inverted" in el.dataset
+            ? !el.checked
+            : el.checked
           : "number" in el.dataset
             ? Number(el.value)
             : "lines" in el.dataset
