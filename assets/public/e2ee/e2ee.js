@@ -5615,6 +5615,61 @@ backup:${this.userId}`,
       }
       payloads.set(message.id, payload);
     };
+    const previewed = new Map();
+    const previews = (message) => {
+      try {
+        if (localStorage.getItem("fosscord-e2ee-previews") === "0") return;
+      } catch {}
+      const text = typeof message.content === "string" ? message.content : "";
+      const urls = [
+        ...new Set(
+          (text.match(/<?https?:\/\/[^\s<>]+>?/g) ?? []).filter((u) => !u.startsWith("<")),
+        ),
+      ].slice(0, 5);
+      if (!urls.length) return;
+      const apply = (found) => {
+        const embeds = urls.flatMap((u) => found[u] ?? previewed.get(u) ?? []);
+        if (!embeds.length) return;
+        const target = readable.get(message.channel_id)?.get(message.id) ?? clone(message);
+        const copy = target;
+        copy.embeds = embeds;
+        copy.flags = Number(copy.flags ?? 0) & ~4;
+        redispatch(copy);
+      };
+      const missing = urls.filter((u) => !previewed.has(u));
+      if (!missing.length) return void setTimeout(() => apply({}), 300);
+      ctx
+        .fetchEmbeds(missing)
+        .then((found) => {
+          for (const u of missing) previewed.set(u, found[u] ?? []);
+          apply(found);
+        })
+        .catch(() => {});
+    };
+    const soundCache = new Map();
+    const soundmoji = async (message) => {
+      const text = typeof message.content === "string" ? message.content : "";
+      const refs = [
+        ...new Set(
+          [...text.matchAll(/<sound:(\d+):(\d+)>/g)].map(([, guild, sound]) => `${guild}:${sound}`),
+        ),
+      ].slice(0, 25);
+      if (!refs.length) return;
+      const soundId = (ref) => ref.split(":")[1];
+      const missing = refs.filter((ref) => !soundCache.has(soundId(ref)));
+      if (missing.length) {
+        try {
+          for (const sound of await ctx.fetchSoundmoji(missing))
+            if (sound?.sound_id) soundCache.set(String(sound.sound_id), sound);
+          for (const ref of missing)
+            if (!soundCache.has(soundId(ref))) soundCache.set(soundId(ref), null);
+        } catch {}
+      }
+      const sounds = refs.map((ref) => soundCache.get(soundId(ref))).filter(Boolean);
+      if (!sounds.length) return;
+      message.soundboard_sounds = sounds;
+      setTimeout(() => ctx.updateRecord(message), 400);
+    };
     const decryptOne = (message) => {
       const key = `${message.id}:${message.encrypted?.sig}`;
       const sync = engine.cached(message);
@@ -5622,8 +5677,10 @@ backup:${this.userId}`,
         show(message, sync);
         states.set(message.id, { state: "decrypted" });
         retry.delete(message.id);
-        remember(message);
-        return Promise.resolve();
+        return soundmoji(message).then(() => {
+          remember(message);
+          previews(message);
+        });
       }
       if (!ctx.isReady()) {
         if (ctx.failClosed()) {
@@ -5648,7 +5705,9 @@ backup:${this.userId}`,
             states.set(message.id, { state: "decrypted" });
             retry.delete(message.id);
             show(message, payload);
+            await soundmoji(message);
             remember(message);
+            previews(message);
           } catch (error) {
             const code = error instanceof E2eeError ? error.code : null;
             const state =
@@ -6006,6 +6065,8 @@ backup:${this.userId}`,
           if (hit !== undefined) {
             show(message, hit);
             states.set(message.id, { state: "decrypted" });
+            remember(message);
+            previews(message);
             continue;
           }
           const copy = clone(message);
@@ -8328,6 +8389,9 @@ ${approver}`;
     if (ok) hooks.retryAll();
   });
   var hooks = createHooks({
+    fetchEmbeds: async (urls) => (await api.request("post", "/e2ee/embeds", { urls })).embeds ?? {},
+    fetchSoundmoji: async (refs) =>
+      (await api.request("post", "/e2ee/soundmoji", { refs })).sounds ?? [],
     engine,
     attachments,
     sticker,
@@ -8364,6 +8428,9 @@ ${approver}`;
         loader.updateMessage?.(message.channel_id, message.id, {
           content: message.content ?? "",
           stickerItems: message.sticker_items ?? [],
+          ...(message.soundboard_sounds?.length
+            ? { soundboardSounds: message.soundboard_sounds }
+            : {}),
         });
       } catch (error) {
         console.error("[e2ee] couldn't refresh a decrypted message", error);
