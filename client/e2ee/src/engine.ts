@@ -77,7 +77,6 @@ export interface RawMessage {
     author?: { id: string; system?: boolean };
     embeds?: unknown[];
     flags?: number;
-    embeds?: unknown[];
     soundboard_sounds?: unknown[];
     attachments?: RawAttachment[];
     sticker_items?: unknown[];
