@@ -3,7 +3,7 @@ import { Request, Response, Router } from "express";
 import { HTTPError } from "lambert-server/HTTPError";
 import crypto from "node:crypto";
 import { ILike, MoreThan } from "typeorm";
-import { checkRegistrationCaptcha, registrationCapEndpoint } from "@spacebar/api/util";
+import { captchaKeyFrom, checkRegistrationCaptcha, registrationCapEndpoint } from "@spacebar/api/util";
 import { isPrideBadgeSelection } from "@spacebar/api/util/utility/prideBadgeSelection";
 import { route } from "@spacebar/api/middlewares";
 import { Invite, User, ValidRegistrationToken } from "@spacebar/database";
@@ -45,7 +45,8 @@ router.post(
         const { register, limits } = Config.get();
         const ip = req.ip!;
 
-        const captcha = await checkRegistrationCaptcha(body.captcha_key, false);
+        const captchaKey = captchaKeyFrom(req);
+        const captcha = await checkRegistrationCaptcha(captchaKey, false);
         if (captcha) return res.status(400).json(captcha);
 
         // Reg tokens
@@ -349,7 +350,7 @@ router.post(
             });
 
         if (register.requireCaptcha && registrationCapEndpoint() === "/api/v9/auth/cap/") {
-            const claimed = await checkRegistrationCaptcha(body.captcha_key);
+            const claimed = await checkRegistrationCaptcha(captchaKey);
             if (claimed) return res.status(400).json(claimed);
         }
 

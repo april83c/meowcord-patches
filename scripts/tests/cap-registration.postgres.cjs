@@ -244,6 +244,52 @@ test("correctable password and username errors do not consume the solved registr
     }
 });
 
+test("a proof solved in the client's challenge dialog authorizes the retried signup through X-Captcha-Key", options, async () => {
+    const savedRegister = cfg.register;
+    const savedLimit = cfg.limits.absoluteRate.register;
+    cfg.limits.absoluteRate.register = { ...savedLimit, enabled: false };
+    cfg.register = {
+        ...originalRegister,
+        requireCaptcha: true,
+        allowNewRegistration: true,
+        disabled: false,
+        allowMultipleAccounts: true,
+        enableAbuseIpDb: false,
+        enableIpData: false,
+        requireInvite: false,
+        guestsRequireInvite: false,
+        email: { ...originalRegister.email, required: false },
+    };
+    cfg.security.captcha = { enabled: false };
+    const router = require("../../dist/api/routes/auth/register").default;
+    const handler = router.stack.find((layer) => layer.route?.methods.post).route.stack.at(-1).handle;
+    const result = await redeem(await solvedChallenge());
+    try {
+        for (const firstAttemptKey of [undefined, "rejected-first-attempt"]) {
+            await assert.rejects(
+                handler(
+                    {
+                        body: { username: "capfixture", password: "a", consent: true, captcha_key: firstAttemptKey },
+                        ip: "192.0.2.125",
+                        get: (name) => (name === "X-Captcha-Key" ? result.token : undefined),
+                        t: (key) => key,
+                    },
+                    {
+                        status() {
+                            throw new Error("A solved proof in X-Captcha-Key should reach form validation");
+                        },
+                    },
+                ),
+                (error) => error.code === 50035 && !!error.errors?.password,
+            );
+            assert.equal(await cap.registrationTokenAvailable(result.token), true);
+        }
+    } finally {
+        cfg.register = savedRegister;
+        cfg.limits.absoluteRate.register = savedLimit;
+    }
+});
+
 test("closed registration exposes policy errors on username without consuming a valid proof", options, async () => {
     const savedRegister = cfg.register;
     const router = require("../../dist/api/routes/auth/register").default;
