@@ -1,5 +1,5 @@
 import { Request, Response, Router } from "express";
-import { checkCaptcha } from "@spacebar/api/util";
+import { captchaKeyFrom, checkCaptcha } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { User } from "@spacebar/database";
 import { Config, Email, FieldErrors } from "@spacebar/util";
@@ -20,7 +20,7 @@ router.post(
         authentication: "never",
     }),
     async (req: Request, res: Response) => {
-        const { login, captcha_key } = req.body as ForgotPasswordSchema;
+        const { login } = req.body as ForgotPasswordSchema;
 
         if (!login?.trim())
             throw FieldErrors({
@@ -29,7 +29,7 @@ router.post(
 
         const config = Config.get();
 
-        const captcha = await checkCaptcha(config.passwordReset.requireCaptcha, captcha_key, req.ip);
+        const captcha = await checkCaptcha(config.passwordReset.requireCaptcha, captchaKeyFrom(req), req.ip);
         if (captcha) return res.status(400).json(captcha);
 
         const user = await User.findOne({

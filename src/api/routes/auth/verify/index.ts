@@ -1,5 +1,5 @@
 import { Request, Response, Router } from "express";
-import { emitUserUpdate, readTicket, checkCaptcha } from "@spacebar/api/util";
+import { emitUserUpdate, readTicket, captchaKeyFrom, checkCaptcha } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { User } from "@spacebar/database";
 import { Config, emitRequiredAction, FieldErrors, generateToken } from "@spacebar/util";
@@ -20,11 +20,11 @@ router.post(
         authentication: "optional",
     }),
     async (req: Request, res: Response) => {
-        const { captcha_key, token } = req.body as { captcha_key?: string; token?: string };
+        const { token } = req.body as { token?: string };
 
         const config = Config.get();
 
-        const captcha = await checkCaptcha(config.register.requireCaptcha, captcha_key, req.ip);
+        const captcha = await checkCaptcha(config.register.requireCaptcha, captchaKeyFrom(req), req.ip);
         if (captcha) return res.status(400).json(captcha);
 
         const invalid = () =>

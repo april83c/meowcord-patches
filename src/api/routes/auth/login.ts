@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import { Request, Response, Router } from "express";
-import { loginMfaResponse, checkCaptcha } from "@spacebar/api/util";
+import { loginMfaResponse, captchaKeyFrom, checkCaptcha } from "@spacebar/api/util";
 import { route } from "@spacebar/api/middlewares";
 import { User } from "@spacebar/database";
 import { Config, FieldErrors, generateToken } from "@spacebar/util";
@@ -23,11 +23,11 @@ router.post(
         authentication: "never",
     }),
     async (req: Request, res: Response) => {
-        const { login, password, captcha_key, undelete } = req.body as LoginSchema;
+        const { login, password, undelete } = req.body as LoginSchema;
 
         const config = Config.get();
 
-        const captcha = await checkCaptcha(config.login.requireCaptcha, captcha_key, req.ip);
+        const captcha = await checkCaptcha(config.login.requireCaptcha, captchaKeyFrom(req), req.ip);
         if (captcha) return res.status(400).json(captcha);
 
         const user = await User.findOneOrFail({

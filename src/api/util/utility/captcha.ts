@@ -1,9 +1,14 @@
+import type { Request } from "express";
 import { Config } from "@spacebar/util";
 import { CaptchaRequiredResponse } from "@spacebar/schemas";
 
 export interface CaptchaVerifyResult {
     success: boolean;
     "error-codes"?: string[];
+}
+
+export function captchaKeyFrom(req: Request): string | null | undefined {
+    return req.get("X-Captcha-Key") || (req.body as { captcha_key?: string | null } | undefined)?.captcha_key;
 }
 
 const verifyEndpoints = {

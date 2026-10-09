@@ -123,3 +123,13 @@ test("standalone provider failures remain required verification challenges", asy
         assert.ok(challenge.captcha_key.length);
     }
 });
+test("a proof in X-Captcha-Key replaces the key the first attempt put in the body", () => {
+    const api = fixture({});
+    const request = (header, body) => ({ get: (name) => (name === "X-Captcha-Key" ? header : undefined), body });
+    assert.equal(api.captchaKeyFrom(request("solved-in-dialog", { captcha_key: "rejected-first-attempt" })), "solved-in-dialog");
+    assert.equal(api.captchaKeyFrom(request("solved-in-dialog", {})), "solved-in-dialog");
+    assert.equal(api.captchaKeyFrom(request(undefined, { captcha_key: "solved-in-form" })), "solved-in-form");
+    assert.equal(api.captchaKeyFrom(request("", { captcha_key: "solved-in-form" })), "solved-in-form");
+    assert.equal(api.captchaKeyFrom(request(undefined, {})), undefined);
+    assert.equal(api.captchaKeyFrom(request(undefined, undefined)), undefined);
+});

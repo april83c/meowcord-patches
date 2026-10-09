@@ -19,6 +19,14 @@ const browser = await playwright[browserName].launch(
         : { headless: true },
 );
 const contextOptions = browserName === "webkit" ? playwright.devices["iPhone 13"] : {};
+const withoutScreenCapture = () => {
+    if (globalThis.MediaDevices) delete MediaDevices.prototype.getDisplayMedia;
+};
+const newContext = async (options) => {
+    const context = await browser.newContext(options);
+    if (options.isMobile) await context.addInitScript(withoutScreenCapture);
+    return context;
+};
 const pageErrors = [];
 const trackErrors = (page) =>
     page.on("pageerror", (error) => {
@@ -27,7 +35,7 @@ const trackErrors = (page) =>
 let fixtureUserId;
 const registerRoute = (url) => url.pathname.endsWith("/auth/register");
 try {
-    const context = await browser.newContext(contextOptions);
+    const context = await newContext(contextOptions);
     const page = await context.newPage();
     trackErrors(page);
     const outbound = new Set();
@@ -121,7 +129,7 @@ try {
     assert.equal(outbound.size, 0, "Signup and solving contact only this instance");
     await context.close();
     if (browserName === "chromium") {
-        const retryContext = await browser.newContext(contextOptions);
+        const retryContext = await newContext(contextOptions);
         const retryPage = await retryContext.newPage();
         trackErrors(retryPage);
         await retryPage.route("**/api/v9/auth/cap/widget.js", (route) => route.abort());
@@ -137,7 +145,7 @@ try {
         assert.equal(await retryPage.locator("cap-widget").count(), 1);
         await retryContext.close();
     }
-    const mobileContext = await browser.newContext({
+    const mobileContext = await newContext({
         ...playwright.devices[browserName === "webkit" ? "iPhone 13" : "Pixel 5"],
     });
     const mobilePage = await mobileContext.newPage();
