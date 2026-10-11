@@ -1,10 +1,11 @@
+import { sqlArrayIncludes } from "@spacebar/database/Sql";
 import { HTTPError } from "lambert-server/HTTPError";
 import { In, Raw } from "typeorm";
 // noinspection ES6PreferShortImport -- Causes a circular reference...
 import { fillMessageUrlEmbeds } from "../utility/EmbedHandlers";
 import { resolveSoundmoji } from "../utility/Soundboard";
 import { getDatabase, Application, Attachment, Channel, CloudAttachment, Guild, Member, Message, ReadState, Role, Sticker, User, Webhook } from "@spacebar/database";
-import { Stopwatch, Random } from "@spacebar/extensions";
+import { Stopwatch, Random, normalizeLineEndings } from "@spacebar/extensions";
 import {
     Config,
     DiscordApiErrors,
@@ -456,6 +457,7 @@ export async function handleMessage(
     } = {},
 ): Promise<Message> {
     const conf = Config.get();
+    if (opts.content !== undefined) opts.content = normalizeLineEndings(opts.content);
     checkMessageLimits(opts);
     if (opts.components && known.componentsChanged !== false) handleComps(opts.components, opts.flags || 0);
 
@@ -568,7 +570,7 @@ export async function handleMessage(
             message.username = opts.username;
             message.author.username = message.username;
         }
-        if (Config.get().externalRequests.thirdParty && opts.avatar_url && URL.canParse(opts.avatar_url) && /^https?:$/.test(new URL(opts.avatar_url).protocol)) {
+        if (opts.avatar_url && URL.canParse(opts.avatar_url) && /^https?:$/.test(new URL(opts.avatar_url).protocol)) {
             const avatar = await fetchPublicUrl(opts.avatar_url, { signal: AbortSignal.timeout(10_000) })
                 .then(async (res) => {
                     const type = res.headers.get("content-type");
@@ -1184,11 +1186,10 @@ async function handleMessageMentionsAsync(message: Message, allowed?: AllowedMen
 
         if (users.size) {
             await fillInMissingIDs([...users], trace);
-            await ReadState.query(`UPDATE read_states SET mention_count = mention_count + 1 WHERE channel_id = $1 AND read_state_type = $2 AND user_id = ANY($3::bigint[])`, [
-                channel.id,
-                ReadStateType.CHANNEL,
-                [...users],
-            ]);
+            await ReadState.query(
+                `UPDATE read_states SET mention_count = mention_count + 1 WHERE channel_id = $1 AND read_state_type = $2 AND ${sqlArrayIncludes("user_id", "$3")}`,
+                [channel.id, ReadStateType.CHANNEL, [...users]],
+            );
             trace.calls.push("updateMentionedUserReadStates", {
                 micros: sw.getElapsedAndReset().totalMicroseconds,
             });
