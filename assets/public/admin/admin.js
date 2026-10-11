@@ -580,6 +580,7 @@ const TABS = {
   experiments: renderExperiments,
   games: renderGames,
   store: renderStore,
+  stickers: renderStickerPacks,
   announcements: renderAnnouncements,
   official: renderOfficialInbox,
   guilds: renderGuilds,
@@ -4497,6 +4498,443 @@ function openStoreItem(pack, item, refresh) {
       if (!body.isConnected || $("#drawer").hidden) return;
       openPack(pack.id, refresh);
     }
+  });
+}
+
+/* ---------- sticker packs ---------- */
+
+const STICKER_FORMATS = { 1: "PNG", 2: "APNG", 3: "Lottie", 4: "GIF" };
+const STICKER_FILE_TYPES = "image/png,image/apng,image/gif,image/webp,application/json,.json";
+
+const stickersState = { data: null };
+
+const stickerThumb = (sticker, cls = "", fallback = "Lottie") =>
+  !sticker
+    ? html`<span class="sticker-thumb ${cls}">${fallback === "Lottie" ? "?" : fallback}</span>`
+    : sticker.format_type === 3
+      ? html`<span class="sticker-thumb ${cls}" title="Lottie animations have no preview here">${fallback}</span>`
+      : html`<img class="sticker-thumb ${cls}" src="${sticker.url}" alt="" loading="lazy" />`;
+
+const watchStickerThumbs = (root) => {
+  for (const img of $$("img.sticker-thumb", root))
+    img.addEventListener("error", () => {
+      const missing = document.createElement("span");
+      missing.className = img.className;
+      missing.title = "This sticker's artwork isn't stored on this instance";
+      missing.textContent = "?";
+      img.replaceWith(missing);
+    });
+};
+
+const stickerPackCover = (pack) =>
+  pack.stickers.find((sticker) => sticker.id === pack.cover_sticker_id) ?? pack.stickers[0];
+
+const stickerNameFromFile = (filename) => {
+  const name = filename
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .slice(0, 30)
+    .trim();
+  return name.length >= 2 ? name : "Sticker";
+};
+
+const stickerFileLimit = () => `${stickersState.data.limits.file_bytes / 1048576} MB`;
+
+async function pickStickerArt(file) {
+  if (file.size > stickersState.data.limits.file_bytes) {
+    toast(`${file.name} is over ${stickerFileLimit()}.`, "error");
+    return undefined;
+  }
+  return readAsDataUrl(file);
+}
+
+async function renderStickerPacks(view) {
+  const data = (stickersState.data = await api("/admin/sticker-packs"));
+  mount(
+    view,
+    html`
+            <div class="page-head">
+                <div>
+                    <h1>Sticker packs</h1>
+                    <p class="muted">
+                        The packs everyone gets in the sticker picker, below the stickers of their servers. Add your own packs, or rename, reorder and trim the ones already here.
+                        Hiding a pack takes it out of the picker and leaves messages that used its stickers alone; deleting it removes the stickers from those messages too. An
+                        open client picks up new and edited packs within an hour, and drops hidden or deleted ones when it reloads.
+                    </p>
+                </div>
+                <button class="btn primary" id="new-sticker-pack" type="button">Add pack</button>
+            </div>
+            <div class="stack">
+                ${
+                  data.packs.length
+                    ? html`<div class="row" id="sticker-pack-bulk" style="gap:8px" hidden>
+                              <span class="muted" id="sticker-pack-count"></span>
+                              <button class="btn small" type="button" data-bulk="show">Show in the picker</button>
+                              <button class="btn small" type="button" data-bulk="hide">Hide from the picker</button>
+                              <button class="btn small danger" type="button" data-bulk="delete">Delete</button>
+                          </div>
+                          <div class="table-wrap">
+                              <table>
+                                  <thead>
+                                      <tr>
+                                          <th style="width:1%"><input type="checkbox" id="sticker-pack-all" aria-label="Select every pack" /></th>
+                                          <th>Pack</th>
+                                          <th>Stickers</th>
+                                          <th class="hide-sm">Order</th>
+                                          <th>Picker</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody>
+                                      ${data.packs.map(
+                                        (pack) =>
+                                          html`<tr data-sticker-pack="${pack.id}">
+                                                  <td data-select><input type="checkbox" data-select-pack="${pack.id}" aria-label="Select ${pack.name}" /></td>
+                                                  <td>
+                                                      <div class="ident">
+                                                          ${stickerThumb(stickerPackCover(pack), "small", initials(pack.name))}
+                                                          <div>
+                                                              <button class="btn small" type="button" style="align-self:flex-start" aria-label="Edit ${pack.name}">
+                                                                  ${pack.name}</button
+                                                              ><span class="muted">${pack.description || "No description"}</span>
+                                                          </div>
+                                                      </div>
+                                                  </td>
+                                                  <td>${fmtNumber(pack.stickers.length)}</td>
+                                                  <td class="hide-sm">${pack.position}</td>
+                                                  <td>
+                                                      ${
+                                                        pack.hidden
+                                                          ? html`<span class="badge">Hidden</span>`
+                                                          : pack.stickers.length
+                                                            ? html`<span class="badge ok">Shown</span>`
+                                                            : html`<span class="badge warn">Empty</span>`
+                                                      }
+                                                  </td>
+                                              </tr>`,
+                                      )}
+                                  </tbody>
+                              </table>
+                          </div>`
+                    : html`
+                        <div class="card empty">
+                          No sticker packs yet. Add one, then upload stickers into it.
+                        </div>
+                      `
+                }
+            </div>
+        `,
+  );
+  watchStickerThumbs(view);
+  const refresh = () => renderStickerPacks(view);
+  $("#new-sticker-pack").addEventListener("click", () => openStickerPack(null, refresh));
+  for (const row of $$("tr[data-sticker-pack]", view))
+    row.addEventListener("click", (event) => {
+      if (!event.target.closest("[data-select]")) openStickerPack(row.dataset.stickerPack, refresh);
+    });
+
+  const all = $("#sticker-pack-all", view);
+  const boxes = $$("[data-select-pack]", view);
+  const selected = () => boxes.filter((box) => box.checked).map((box) => box.dataset.selectPack);
+  const syncBulk = () => {
+    const count = selected().length;
+    $("#sticker-pack-bulk", view).hidden = !count;
+    $("#sticker-pack-count", view).textContent = `${count} selected`;
+    all.checked = count === boxes.length;
+    all.indeterminate = count > 0 && count < boxes.length;
+  };
+  all?.addEventListener("change", () => {
+    for (const box of boxes) box.checked = all.checked;
+    syncBulk();
+  });
+  for (const box of boxes) box.addEventListener("change", syncBulk);
+  for (const button of $$("[data-bulk]", view))
+    button.addEventListener("click", async () => {
+      const ids = selected();
+      const action = button.dataset.bulk;
+      const packs = `${ids.length} ${ids.length === 1 ? "pack" : "packs"}`;
+      if (action === "delete") {
+        const reimport =
+          data.import_enabled && ids.length === data.packs.length
+            ? " No pack would be left, so Discord’s packs are imported again while “Import standard sticker packs from Discord” is on in Site settings."
+            : "";
+        if (!confirm(`Delete ${packs} and their stickers? Messages that used them lose the sticker.${reimport}`)) return;
+      }
+      let done = 0;
+      for (const id of ids) {
+        const result = await act(button, () =>
+          action === "delete"
+            ? api(`/admin/sticker-packs/${id}`, { method: "DELETE" })
+            : api(`/admin/sticker-packs/${id}`, { method: "PATCH", body: { hidden: action === "hide" } }),
+        );
+        if (result !== undefined) done++;
+      }
+      if (done) toast(`${done} ${done === 1 ? "pack" : "packs"} ${action === "delete" ? "deleted" : action === "hide" ? "hidden" : "shown"}`);
+      refresh();
+    });
+}
+
+function openStickerPack(packId, refresh) {
+  const { packs, limits } = stickersState.data;
+  const pack = packId ? packs.find((entry) => entry.id === packId) : null;
+  if (packId && !pack) return;
+  const room = pack ? limits.stickers_per_pack - pack.stickers.length : 0;
+  const body = openDrawer(
+    pack ? pack.name : "Add sticker pack",
+    html`
+            <form id="sticker-pack-form" class="stack">
+                <label>Name<input name="name" required maxlength="100" value="${pack?.name ?? ""}" placeholder="Instance mascots" /></label>
+                <label>Description<span class="hint">Optional.</span><textarea name="description" maxlength="500" rows="2">${pack?.description ?? ""}</textarea></label>
+                <label
+                    >Order<span class="hint">Packs with a lower number come first in the picker. Packs with the same number go oldest first.</span
+                    ><input name="position" type="number" step="1" min="-2147483648" max="2147483647" value="${pack?.position ?? 0}"
+                /></label>
+                <label class="toggle"
+                    ><input name="visible" type="checkbox" ${pack?.hidden ? "" : raw("checked")} /><span
+                        >Show in the picker<span class="hint">Turn this off to hide the pack. Stickers already sent from it stay in their messages.</span></span
+                    ></label
+                >
+                ${
+                  pack?.stickers.length
+                    ? html`<label
+                              >Cover<span class="hint">The sticker shown as the pack’s icon in the picker.</span
+                              ><select name="cover_sticker_id">
+                                  ${options(
+                                    [["", "First sticker"], ...pack.stickers.map((sticker) => [sticker.id, sticker.name])],
+                                    pack.cover_sticker_id ?? "",
+                                  )}
+                              </select></label
+                          >`
+                    : ""
+                }
+                <div class="form-actions">
+                    ${
+                      pack
+                        ? html`
+                            <button class="btn danger" id="sticker-pack-delete" type="button" style="margin-right: auto">
+                              Delete pack
+                            </button>
+                          `
+                        : ""
+                    }
+                    <button class="btn primary" type="submit">${pack ? "Save pack" : "Add pack"}</button>
+                </div>
+            </form>
+            ${
+              pack
+                ? html`<div class="stack" style="margin-top:20px">
+                          <div class="row" style="justify-content:space-between">
+                              <h3 style="margin:0">Stickers <span class="muted">${pack.stickers.length} of ${limits.stickers_per_pack}</span></h3>
+                              <button class="btn small primary" id="sticker-add" type="button" ${room > 0 ? "" : raw("disabled")}>Add stickers</button>
+                              <input id="sticker-files" type="file" accept="${STICKER_FILE_TYPES}" multiple hidden />
+                          </div>
+                          <p class="muted" style="margin:0">
+                              Pick one or more PNG, APNG, GIF, WebP or Lottie JSON files, up to ${stickerFileLimit()} each. Each file becomes a sticker named after it, and
+                              you can rename it afterwards. 320×320 is the size the picker is made for.
+                          </p>
+                          ${
+                            pack.stickers.length
+                              ? html`<div class="sticker-grid">
+                                        ${pack.stickers.map(
+                                          (sticker) =>
+                                            html`<button class="sticker-tile" type="button" data-sticker="${sticker.id}" title="${sticker.name}">
+                                                    ${stickerThumb(sticker)}<span>${sticker.name}</span>
+                                                </button>`,
+                                        )}
+                                    </div>`
+                              : html`
+                                  <p class="muted" style="margin: 0">No stickers yet. An empty pack stays out of the picker.</p>
+                                `
+                          }
+                      </div>`
+                : ""
+            }
+        `,
+  );
+  if (!body) return;
+  watchStickerThumbs(body);
+  const form = $("#sticker-pack-form", body);
+  const reopen = async (id) => {
+    await refresh();
+    if (!body.isConnected || $("#drawer").hidden) return;
+    openStickerPack(id, refresh);
+  };
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const payload = {
+      name: form.name.value,
+      description: form.description.value,
+      position: Number(form.position.value) || 0,
+      hidden: !form.visible.checked,
+    };
+    if (form.cover_sticker_id) payload.cover_sticker_id = form.cover_sticker_id.value || null;
+    const saved = await act(
+      $("button[type=submit]", form),
+      () =>
+        pack
+          ? api(`/admin/sticker-packs/${pack.id}`, { method: "PATCH", body: payload })
+          : api("/admin/sticker-packs", { method: "POST", body: payload }),
+      pack ? "Pack saved" : "Pack added",
+    );
+    if (saved) await reopen(saved.id);
+  });
+  $("#sticker-pack-delete", body)?.addEventListener("click", async (e) => {
+    const count = pack.stickers.length;
+    const reimport =
+      stickersState.data.import_enabled && packs.length === 1
+        ? " This is the last pack, so Discord’s packs are imported again while “Import standard sticker packs from Discord” is on in Site settings."
+        : "";
+    if (
+      !confirm(
+        `Delete "${pack.name}" and its ${count} ${count === 1 ? "sticker" : "stickers"}? Messages that used them lose the sticker.${reimport}`,
+      )
+    )
+      return;
+    const done = await act(
+      e.currentTarget,
+      () => api(`/admin/sticker-packs/${pack.id}`, { method: "DELETE" }),
+      "Pack deleted",
+    );
+    if (done !== undefined) {
+      closeDrawer({ discard: true });
+      refresh();
+    }
+  });
+
+  const files = $("#sticker-files", body);
+  const add = $("#sticker-add", body);
+  add?.addEventListener("click", () => files.click());
+  files?.addEventListener("change", async () => {
+    const picked = [...files.files];
+    files.value = "";
+    if (!picked.length) return;
+    if (picked.length > room)
+      toast(`This pack has room for ${room} more ${room === 1 ? "sticker" : "stickers"}, the rest were left out.`, "error");
+    const label = add.textContent;
+    let added = 0;
+    for (const [index, file] of picked.slice(0, room).entries()) {
+      add.textContent = `Adding ${index + 1} of ${Math.min(picked.length, room)}…`;
+      const file_data = await pickStickerArt(file);
+      if (!file_data) continue;
+      const sticker = await act(add, () =>
+        api(`/admin/sticker-packs/${pack.id}/stickers`, {
+          method: "POST",
+          body: { name: stickerNameFromFile(file.name), file_data },
+        }),
+      );
+      if (sticker) added++;
+    }
+    add.textContent = label;
+    if (!added) return;
+    toast(`${added} ${added === 1 ? "sticker" : "stickers"} added`);
+    await reopen(pack.id);
+  });
+  for (const tile of $$("[data-sticker]", body))
+    tile.addEventListener("click", () =>
+      openSticker(
+        pack,
+        pack.stickers.find((sticker) => sticker.id === tile.dataset.sticker),
+        refresh,
+      ),
+    );
+}
+
+function openSticker(pack, sticker, refresh) {
+  const { packs } = stickersState.data;
+  const body = openDrawer(
+    `Edit ${sticker.name}`,
+    html`
+            <form id="sticker-form" class="stack">
+                <div class="row" style="gap:16px">
+                    ${stickerThumb(sticker, "large")}
+                    <div class="stack" style="gap:4px">
+                        <span class="badges"
+                            ><span class="badge">${STICKER_FORMATS[sticker.format_type] ?? "Sticker"}</span
+                            ><span class="badge">${sticker.uploaded ? "Uploaded here" : "From Discord"}</span></span
+                        >
+                        <span class="muted">ID ${sticker.id}</span>
+                    </div>
+                </div>
+                <label>Name<input name="name" required minlength="2" maxlength="30" value="${sticker.name}" /></label>
+                <label
+                    >Description<span class="hint">Optional. What it shows, for people who can’t see it.</span
+                    ><input name="description" maxlength="100" value="${sticker.description}"
+                /></label>
+                <label
+                    >Search words<span class="hint">Optional. Comma-separated words people find the sticker by, next to its name.</span
+                    ><input name="tags" maxlength="200" value="${sticker.tags}" placeholder="wave, hello, hi"
+                /></label>
+                <div class="form-grid">
+                    <label
+                        >Pack<select name="pack_id">
+                            ${options(
+                              packs.map((entry) => [entry.id, entry.name]),
+                              sticker.pack_id,
+                            )}</select
+                        ><span class="hint">Moving keeps the sticker and its artwork.</span></label
+                    >
+                    <label
+                        >Order in this pack<input name="sort_value" type="number" step="1" min="-2147483648" max="2147483647" value="${sticker.sort_value}" /><span class="hint"
+                            >Lower numbers appear first.</span
+                        ></label
+                    >
+                </div>
+                <label
+                    >Replace artwork<span class="hint"
+                        >PNG, APNG, GIF, WebP or Lottie JSON, up to ${stickerFileLimit()}. Browsers that already loaded the old artwork keep showing it for up to 6 hours.</span
+                    ><input name="file" type="file" accept="${STICKER_FILE_TYPES}"
+                /></label>
+                <div class="form-actions">
+                    <button class="btn" id="sticker-back" type="button" style="margin-right:auto">Back to ${pack.name}</button>
+                    <button class="btn danger" id="sticker-delete" type="button">Delete</button>
+                    <button class="btn primary" type="submit">Save</button>
+                </div>
+            </form>
+        `,
+  );
+  if (!body) return;
+  watchStickerThumbs(body);
+  const form = $("#sticker-form", body);
+  const reopenPack = async (id) => {
+    await refresh();
+    if (!body.isConnected || $("#drawer").hidden) return;
+    openStickerPack(id, refresh);
+  };
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const payload = {
+      name: form.name.value,
+      description: form.description.value,
+      tags: form.tags.value,
+      sort_value: Number(form.sort_value.value) || 0,
+    };
+    if (form.pack_id.value !== sticker.pack_id) {
+      payload.pack_id = form.pack_id.value;
+      if (payload.sort_value === sticker.sort_value) delete payload.sort_value;
+    }
+    const file = form.file.files[0];
+    if (file) {
+      payload.file_data = await pickStickerArt(file);
+      if (!payload.file_data) return;
+    }
+    const saved = await act(
+      $("button[type=submit]", form),
+      () => api(`/admin/sticker-packs/${pack.id}/stickers/${sticker.id}`, { method: "PATCH", body: payload }),
+      "Sticker saved",
+    );
+    if (saved) await reopenPack(saved.pack_id);
+  });
+  $("#sticker-back", body).addEventListener("click", () => openStickerPack(pack.id, refresh));
+  $("#sticker-delete", body).addEventListener("click", async (e) => {
+    if (!confirm(`Delete "${sticker.name}"? Messages that used it lose the sticker.`)) return;
+    const done = await act(
+      e.currentTarget,
+      () => api(`/admin/sticker-packs/${pack.id}/stickers/${sticker.id}`, { method: "DELETE" }),
+      "Sticker deleted",
+    );
+    if (done !== undefined) await reopenPack(pack.id);
   });
 }
 
