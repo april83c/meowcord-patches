@@ -7,7 +7,7 @@
 - [setup.md](self-hosting/setup.md): native hosting entry point, Docker and development setup, and the first operator account.
 - [deploy.md](self-hosting/deploy.md): production with Docker Compose, backups, updates, reverse proxies, Cloudflare Tunnel and phones.
 - [external-services.md](self-hosting/external-services.md): every outside service the instance can contact and how each is turned on.
-- [stickers.md](self-hosting/stickers.md): provisioning the standard sticker artwork locally.
+- [stickers.md](self-hosting/stickers.md): provisioning the standard sticker artwork locally and editing sticker packs.
 
 ## Features
 
